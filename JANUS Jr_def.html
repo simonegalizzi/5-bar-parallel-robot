@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+		<meta name="viewport" content="width=device-width, initial-scale=0.7">
+		<title>JANUS Jr by Simoz</title>
+		
+		<meta name="description" content="JANUS">
+		<meta name="author" content="Simoz using Roberto D&#39;Amico script">
+		<style>
+*
+{
+	box-sizing: border-box;
+}
+body
+{
+	margin: 0px;
+	padding: 0px;
+	font-family: monospace;
+	color: #ffffff;
+}
+.row
+{
+	display: inline-flex;
+	clear: both;
+}
+.columnLateral
+{
+  float: left;
+  width: 15%;
+  min-width: 300px;
+}
+.columnCetral
+{
+  float: left;
+  width: 70%;
+  min-width: 300px;
+}
+#joy2Div
+{
+	width:750px;
+	height:781px;
+	margin:20px
+}
+#joystick
+{
+	border: 1px solid #FF0000;
+}
+#joystick2
+{
+	border: 1px solid #fcffff;
+}
+		</style>
+	</head>
+	<body style="background-color:#131313;">
+
+	<center>
+	<h1>JANUS Jr by Simoz</h1>
+	<div id="joy2Div"></div>
+	</center>
+	
+	<center>
+	Position X:<input id="joy2PosizioneX" type="text" value="0">&ensp;<label id="posx">0</label><br><br><br>
+	Position Y:<input id="joy2PosizioneY" type="text" value="190">&ensp;<label id="posy">190</label><br><br><br>
+	</center>
+	<font face="Comic Sans MS" size="2" color="#32CD32">
+	<table>
+	<caption>
+    <p>LISTA COMANDI</p>
+    </caption>
+	<tr><td>Q - Q current PID controller & LPF (see pid and lpf for commands)</td><td>
+		<br>P - proportional gain
+		<br>I - integration gain
+		<br>D - derivative gain
+		<br>L - saturation limit
+		<br>R - ramp parameter
+		<br>F - low pass filtering time constant</td><td><input type="button" value="Salva posizione" onclick="savePos();">&ensp;&ensp;<input type="button" value="Avvia" onclick="play();">&ensp;&ensp;<input type="button" value="Stop" onclick="stop();">&ensp;&ensp;<input type="button" value="Reset" onclick="reset_pos();"></td></tr>
+	<tr><td>D - D current PID controller & LPF (see pid and lpf for commands)</td><td></td><td><input type="button" value="Circle Demo" onclick="Cidemo();">&ensp;&ensp;<input type="button" value="Coins Demo" onclick="Codemo();"></td></tr>
+	<tr><td>V - Velocity PID controller & LPF (see pid and lpf for commands)</td><td></td><td><br>Setup motore:&ensp;&ensp;<input id="comando" type="text" value="MVP"></td></tr>
+	<tr><td>A - Angle PID controller & LPF- (see pid and lpf for commands)</td><td></td><td><br><input type="button" value="MotorA" onclick="motora();">&ensp;&ensp;<input type="button" value="MotorB" onclick="motorb();"></td></tr>
+	<tr><td>L - Limits</td><td>
+		<br>C - Current
+		<br>U - Voltage
+		<br>V - Velocity</tr>
+	<tr><td>R - Motor phase resistance</td><td></td></tr>
+	<tr><td>S - Sensor offsets</td><td>
+		<br>M - sensor offset
+		<br>E - sensor electrical zero</tr>
+	<tr><td>W - PWM settings</td><td>
+		<br>T - pwm modulation type
+		<br>C - pwm waveform centering boolean</tr>
+	<tr><td>M - Monitoring control</td><td>
+		<br>D - downsample monitoring
+		<br>C - clear monitor
+		<br>S - set monitoring variables
+		<br>G - get variable value</tr>
+	<tr><td>C - Motion control type config - see motion control</td><td>
+		<br>D - downsample motion loop
+		<br>0 - torque
+		<br>1 - velocity
+		<br>2 - angle
+		<br>3 - velocity_openloop
+		<br>4 - angle_openloop</tr>
+	<tr><td>T - Torque control type - see motion control</td><td>
+		<br>0 - voltage
+		<br>1 - dc_current
+		<br>2 - foc_current</tr>
+	<tr><td>E - Motor status (enable/disable) - see motion control</td><td>
+		<br>0 - enable
+		<br>1 - disable</tr>
+	</table>
+	</font>
+	
+	
+
+	<script type="text/javascript">
+var saveButton=0;
+var playButton=0;
+var stopButton=0;
+var resetButton=0;
+var CidemoButton=0;
+var CodemoButton=0;
+var motoraButton=0;
+var motorbButton=0;
+
+/////////////////////////////////WEBSOCKETS///////////////////////////////////////////////
+var connection = new WebSocket('ws://'+location.hostname+':8001/', ['arduino']);
+connection.onopen = function ()
+{
+  console.log('Connect_console  -  ' + new Date());  
+}
+connection.onmessage = function (event) 
+{
+  console.log('Server (recives): ', event.data);                             
+}
+
+connection.onerror = function (error) 
+{
+  console.log('WebSocket Error!!!', error);
+}
+/////////////////////////////////////////////////////////////////////////////////////////
+
+function motora(){
+	motoraButton=1;
+}
+
+function motorb(){
+	motorbButton=1;
+}
+
+function savePos(){
+	saveButton=1;
+}
+function play(){
+	playButton=1;
+}
+function stop(){
+	stopButton=1;
+}
+function reset_pos(){
+	resetButton=1;
+}
+function Cidemo(){
+	CidemoButton=1;
+}
+function Codemo(){
+	CodemoButton=1;
+}
+function float2int (value) {
+    return value | 0;
+}
+
+function converti(value,outmax,outmin,inmax,inmin) { 
+    xMax = outmax;
+    xMin = outmin;
+
+    yMax = inmax;
+    yMin = inmin;
+
+    percent = (value - yMin) / (yMax - yMin);
+    return value = percent * (xMax - xMin) + xMin;
+}
+
+var JoyStick = (function(container, parameters) {
+	parameters = parameters || {};
+	var title = (undefined === parameters.title ? 'joystick' : parameters.title),
+		width = (undefined === parameters.width ? 0 : parameters.width),
+		height = (undefined === parameters.height ? 0 : parameters.height),
+		internalFillColor = (undefined === parameters.internalFillColor ? '#ffff00' : parameters.internalFillColor),
+		internalLineWidth = (undefined === parameters.internalLineWidth ? 2 : parameters.internalLineWidth),
+		internalStrokeColor = (undefined === parameters.internalStrokeColor ? '#330106' : parameters.internalStrokeColor),
+		externalLineWidth = (undefined === parameters.externalLineWidth ? 2 : parameters.externalLineWidth),
+		externalStrokeColor = (undefined === parameters.externalStrokeColor ? '#800e04' : parameters.externalStrokeColor),
+		autoReturnToCenter = (undefined === parameters.autoReturnToCenter ? true : parameters.autoReturnToCenter);
+	
+	// Create Canvas element and add it in the Container object
+	var objContainer = document.getElementById(container);
+	var canvas = document.createElement('canvas');
+	canvas.id = title;
+	if(width == 0) width = objContainer.clientWidth;
+	if(height == 0) height = objContainer.clientHeight;
+	canvas.width = width;
+	canvas.height = height;
+	objContainer.appendChild(canvas);
+	var context=canvas.getContext('2d');
+	
+	var pressed = 0; // Bool - 1=Yes - 0=No
+    var circumference = 2 * Math.PI;
+    var internalRadius = (canvas.width-((canvas.width/14)+10))/14;
+	var maxMoveStick = internalRadius + 5;
+	var externalRadius = internalRadius + 30;
+	var centerX = canvas.width / 2;
+	var centerY = canvas.height / 2;
+	var directionHorizontalLimitPos = canvas.width / 10;
+	var directionHorizontalLimitNeg = directionHorizontalLimitPos * -1;
+	var directionVerticalLimitPos = canvas.height / 10;
+	var directionVerticalLimitNeg = directionVerticalLimitPos * -1;
+	// Used to save current position of stick
+	var movedX=centerX;
+	var movedY=centerY;
+		
+	// Check if the device support the touch or not
+	if("ontouchstart" in document.documentElement)
+	{
+		canvas.addEventListener('touchstart', onTouchStart, false);
+		canvas.addEventListener('touchmove', onTouchMove, false);
+		canvas.addEventListener('touchend', onTouchEnd, false);
+	}
+	else
+	{
+		canvas.addEventListener('mousedown', onMouseDown, false);
+		canvas.addEventListener('mousemove', onMouseMove, false);
+		canvas.addEventListener('mouseup', onMouseUp, false);
+	}
+	// Draw the object
+	drawExternal();
+	drawInternal(centerX, centerY);
+	/******************************************************
+	 * Private methods
+	 *****************************************************/
+	/**
+	 * @desc Draw the external circle used as reference position
+	 */
+	function drawExternal()
+	{
+		context.beginPath();
+		context.arc(centerX, centerY, externalRadius, 0, circumference, false);
+		context.lineWidth = externalLineWidth;
+		context.strokeStyle = externalStrokeColor;
+		context.stroke();
+	}
+	/**
+	 * @desc Draw the internal stick in the current position the user have moved it
+	 */
+	function drawInternal()
+	{
+		context.beginPath();
+		if(movedX<internalRadius) movedX=maxMoveStick;
+		if((movedX+internalRadius)>canvas.width) movedX=canvas.width-(maxMoveStick);
+		if(movedY<internalRadius) movedY=maxMoveStick;
+		if((movedY+internalRadius)>canvas.height) movedY=canvas.height-(maxMoveStick);
+		context.arc(movedX, movedY, internalRadius, 0, circumference, false);
+		// create radial gradient
+		var grd = context.createRadialGradient(centerX, centerY, 5, centerX, centerY, 400);
+		// Light color
+		if (resetButton==1){
+			internalFillColor = (undefined === parameters.internalFillColor ? '#7cfc00' : parameters.internalFillColor);
+		} else {
+			internalFillColor = (undefined === parameters.internalFillColor ? '#ffff00' : parameters.internalFillColor);
+		}
+		grd.addColorStop(0, internalFillColor);
+		// Dark color
+		grd.addColorStop(1, internalStrokeColor);
+		context.fillStyle = grd;
+		context.fill();
+		context.lineWidth = internalLineWidth;
+		context.strokeStyle = internalStrokeColor;
+		context.stroke();
+	}
+	
+	/**
+	 * @desc Events for manage touch
+	 */
+	function onTouchStart(event) 
+	{
+		pressed=1;
+	}
+	function onTouchMove(event)
+	{
+		// Prevent the browser from doing its default thing (scroll, zoom)
+		event.preventDefault();
+		if(pressed==1 && event.targetTouches[0].target == canvas)
+		{
+			movedX=event.targetTouches[0].pageX;
+			movedY=event.targetTouches[0].pageY;
+			// Manage offset
+			movedX-=canvas.offsetLeft;
+			movedY-=canvas.offsetTop;
+			// Delete canvas
+			context.clearRect(0, 0, canvas.width, canvas.height);
+			// Redraw object
+			drawExternal();
+			drawInternal();
+			var x = Joy2.GetPosX();
+			x = float2int(x);
+			if (x==375){
+			   x = 0;
+			} else {
+			if (x>375){
+			   //x = converti(x,310,1,450,301);
+			   x = converti(x,319,1,695,376);
+			}else {
+			if (x<375){
+			   //x = converti(x,-1,-310,300,150);
+			   x = converti(x,-1,-319,375,54);
+			}
+			}
+			}
+			joy2IinputPosX.value=float2int(x);
+			var y = Joy2.GetPosY();
+			y = float2int(y);
+			if (y==390){
+			   y = 190;
+			}else {
+			if (y<390){
+			   //x = converti(x,-1,-310,300,150);
+			   y = converti(y,50,189,390,54);
+			}else {
+			if (y>390){
+			   //x = converti(x,310,1,450,301);
+			   y = converti(y,410,191,726,391);
+			}
+			}
+			}
+			//y = converti(y,385,50,726,391);
+			//y = converti(y,390,30,450,150);
+			joy2InputPosY.value=float2int(y);
+		}
+	} 
+	function onTouchEnd(event) 
+	{
+		pressed=0;
+		// If required reset position store variable
+		if(autoReturnToCenter)
+		{
+			movedX=centerX;
+			movedY=centerY;
+		}
+		// Delete canvas
+		context.clearRect(0, 0, canvas.width, canvas.height);
+		// Redraw object
+		drawExternal();
+		drawInternal();
+		//canvas.unbind('touchmove');
+	
+	}
+	/**
+	 * @desc Events for manage mouse
+	 */
+	function onMouseDown(event) 
+	{
+		pressed=1;
+		
+		
+	}
+	function onMouseMove(event) 
+	{
+		if(pressed==1)
+		{
+			movedX=event.pageX;
+			movedY=event.pageY;
+			// Manage offset
+			movedX-=canvas.offsetLeft;
+			movedY-=canvas.offsetTop;
+			// Delete canvas
+			context.clearRect(0, 0, canvas.width, canvas.height);
+			// Redraw object
+			drawExternal();
+			drawInternal();
+			var x = Joy2.GetPosX();
+			x = float2int(x);
+			if (x==375){
+			   x = 0;
+			} else {
+			if (x>375){
+			   //x = converti(x,310,1,450,301);
+			   x = converti(x,319,1,695,376);
+			}else {
+			if (x<375){
+			   //x = converti(x,-1,-310,300,150);
+			   x = converti(x,-1,-319,375,54);
+			}
+			}
+			}
+			joy2IinputPosX.value=float2int(x);
+			var y = Joy2.GetPosY();
+			y = float2int(y);
+			if (y==390){
+			   y = 190;
+			}else {
+			if (y<390){
+			   //x = converti(x,-1,-310,300,150);
+			   y = converti(y,189,50,390,54);
+			}else {
+			if (y>390){
+			   //x = converti(x,310,1,450,301);
+			   y = converti(y,410,191,726,391);
+			}
+			}
+			}
+			//y = converti(y,390,30,450,150);
+			joy2InputPosY.value=float2int(y);
+		}
+		
+	}
+	function onMouseUp(event) 
+	{
+		pressed=0;
+		// If required reset position store variable
+		if(autoReturnToCenter)
+		{
+			movedX=centerX;
+			movedY=centerY;
+		}
+		// Delete canvas
+		context.clearRect(0, 0, canvas.width, canvas.height);
+		// Redraw object
+		drawExternal();
+		drawInternal();
+		//canvas.unbind('mousemove');
+		
+		
+	}
+	/******************************************************
+	 * Public methods
+	 *****************************************************/
+	/**
+	 * @desc The width of canvas
+	 * @return Number of pixel width 
+	 */
+	this.GetWidth = function () 
+	{
+		return canvas.width;
+	};
+	
+	/**
+	 * @desc The height of canvas
+	 * @return Number of pixel height
+	 */
+	this.GetHeight = function () 
+	{
+		return canvas.height;
+	};
+	
+	/**
+	 * @desc The X position of the cursor relative to the canvas that contains it and to its dimensions
+	 * @return Number that indicate relative position
+	 */
+	this.GetPosX = function ()
+	{
+		return movedX;
+	};
+	
+	/**
+	 * @desc The Y position of the cursor relative to the canvas that contains it and to its dimensions
+	 * @return Number that indicate relative position
+	 */
+	this.GetPosY = function ()
+	{
+		if((movedX!=antmovedX||movedY!=antmovedY)&&(pressed==1)){
+			var data= String(joy2IinputPosX.value) +" "+ String(joy2InputPosY.value)+" "+String(saveButton)+" "+String(playButton)+" "+String(stopButton)+" "+String(resetButton)+" "+String(CidemoButton)+" "+String(CodemoButton);
+			connection.send(data);
+			console.log(data);
+			saveButton=0;
+			playButton=0;
+			stopButton=0;
+			CidemoButton=0;
+			CodemoButton=0;
+		}
+		if (resetButton==1){
+		   
+	       movedX = 375;
+	       movedY = 390.5;
+	       context.clearRect(0, 0, canvas.width, canvas.height);
+	       drawExternal();
+	       drawInternal(movedX,movedY);
+		   joy2IinputPosX.value=0;
+		   joy2InputPosY.value=190;
+		   var data= String(joy2IinputPosX.value) +" "+ String(joy2InputPosY.value)+" "+String(saveButton)+" "+String(playButton)+" "+String(stopButton)+" "+String(resetButton)+" "+String(CidemoButton)+" "+String(CodemoButton);
+		   console.log(data);
+		   resetButton=0;
+		   connection.send(data);
+		}
+		if (saveButton==1){
+		  var data= String(joy2IinputPosX.value) +" "+ String(joy2InputPosY.value)+" "+String(saveButton)+" "+String(playButton)+" "+String(stopButton)+" "+String(resetButton)+" "+String(CidemoButton)+" "+String(CodemoButton);
+		  console.log(data);
+		  connection.send(data);
+		  saveButton=0;
+		}
+		if (motoraButton==1){
+		   var data = "A"+valmotore.value;
+		   connection.send(data);
+		   console.log(data);
+		   motoraButton=0;
+		}
+		if (motorbButton==1){
+		   var data = "B"+valmotore.value;
+		   connection.send(data);
+		   console.log(data);
+		   motorbButton=0;
+		}
+		if (playButton==1){
+		  var data= String(joy2IinputPosX.value) +" "+ String(joy2InputPosY.value)+" "+String(saveButton)+" "+String(playButton)+" "+String(stopButton)+" "+String(resetButton)+" "+String(CidemoButton)+" "+String(CodemoButton);
+		  console.log(data);
+		  connection.send(data);
+		}
+		if (stopButton==1){
+		  var data= String(joy2IinputPosX.value) +" "+ String(joy2InputPosY.value)+" "+String(saveButton)+" "+String(playButton)+" "+String(stopButton)+" "+String(resetButton)+" "+String(CidemoButton)+" "+String(CodemoButton);
+		  console.log(data);
+		  connection.send(data);
+		  playButton=0;
+		  stopButton=0;
+		}
+		var antmovedX=movedX;
+		var antmovedY=movedY;
+		return movedY;
+	};
+	
+	/**
+	 * @desc Normalizzed value of X move of stick
+	 * @return Integer from -100 to +100
+	 */
+	this.GetX = function ()
+	{
+		return (100*((movedX - centerX)/maxMoveStick)).toFixed();
+	};
+
+	/**
+	 * @desc Normalizzed value of Y move of stick
+	 * @return Integer from -100 to +100
+	 */
+	this.GetY = function ()
+	{
+		return ((100*((movedY - centerY)/maxMoveStick))*-1).toFixed();
+	};
+	
+	/**
+	 * @desc Get the direction of the cursor as a string that indicates the cardinal points where this is oriented
+	 * @return String of cardinal point N, NE, E, SE, S, SW, W, NW and C when it is placed in the center
+	 */
+	this.GetDir = function()
+	{
+		var result = "";
+		var orizontal = movedX - centerX;
+		var vertical = movedY - centerY;
+		
+		if(vertical>=directionVerticalLimitNeg && vertical<=directionVerticalLimitPos)
+		{
+			result = "C";
+		}
+		if(vertical<directionVerticalLimitNeg)
+		{
+			result = "N";
+		}
+		if(vertical>directionVerticalLimitPos)
+		{
+			result = "S";
+		}
+		
+		if(orizontal<directionHorizontalLimitNeg)
+		{
+			if(result=="C")
+			{ 
+				result = "W";
+			}
+			else
+			{
+				result += "W";
+			}
+		}
+		if(orizontal>directionHorizontalLimitPos)
+		{
+			if(result=="C")
+			{ 
+				result = "E";
+			}
+			else
+			{
+				result += "E";
+			}
+		}
+		
+		return result;
+	};
+});
+
+// Create JoyStick object into the DIV 'joy2Div'
+var joy2Param = { "title": "joystick2", "autoReturnToCenter": false };
+var Joy2 = new JoyStick('joy2Div', joy2Param);
+
+var joy2IinputPosX = document.getElementById("joy2PosizioneX");
+var joy2InputPosY = document.getElementById("joy2PosizioneY");
+var valmotore = document.getElementById("comando");
+var labelX = document.getElementById("posx");
+var labelY = document.getElementById("posy");
+
+
+setInterval(function(){labelX.innerText=float2int(Joy2.GetPosX()); }, 50);
+setInterval(function(){labelY.innerText=float2int(Joy2.GetPosY()); }, 50);
+
+		</script>
+	
+
+</body></html>
