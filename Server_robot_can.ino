@@ -22,8 +22,8 @@ const int SPI_CS_PIN = 5;
   
 MCPCAN CAN(SPI_CS_PIN);                                    // Set CS pin
 // Write wifi network and password
-const char* ssid_wifi = "Vodafone-30440339";
-const char* password_wifi = "cmdp8psusesd54i"; 
+const char* ssid_wifi = "******";
+const char* password_wifi = "******"; 
 // Static variables used in WebSocketEvent_vd() function to manage data recieved from the webpage
 static char *dataJoy;
 static int16_t coordenadas[7];
